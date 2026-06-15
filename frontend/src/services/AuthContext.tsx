@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "./config";
-import { fetchProfile, UserProfile } from "./useProfile";
+import { fetchProfile, createDefaultProfile, UserProfile } from "./useProfile";
 
 interface AuthContextType {
   user: User | null;
@@ -28,7 +28,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const p = await fetchProfile(u.uid);
+        let p = await fetchProfile(u.uid);
+        if (!p && u.email) {
+          try {
+            console.log("No profile found for uid, creating default...");
+            p = await createDefaultProfile(u.uid, u.email);
+          } catch (e) {
+            console.error("Error creating default profile:", e);
+          }
+        }
         setProfile(p);
       } else {
         setProfile(null);

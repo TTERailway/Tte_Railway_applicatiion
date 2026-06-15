@@ -17,9 +17,10 @@ export interface User {
 }
 
 export async function fetchAllUsers(): Promise<User[]> {
-  const q = query(collection(db, "users"), orderBy("name"));
+  const q = collection(db, "users");
   const snap = await getDocs(q);
-  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as User) }));
+  const users = snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as User) }));
+  return users.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
 export async function fetchUserById(id: string): Promise<User | null> {

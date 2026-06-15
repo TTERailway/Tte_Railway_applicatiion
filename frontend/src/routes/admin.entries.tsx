@@ -24,17 +24,26 @@ function AdminEntriesPage() {
   const [collector, setCollector] = useState("");
   const [train, setTrain] = useState("");
 
-  const collectors = users.filter((u) => u.role === "tc");
+  const collectors = users.filter(
+    (u) => u.role?.toLowerCase() === "tc" || u.role?.toLowerCase() === "collector",
+  );
   const bases = Array.from(new Set(collectors.map((c) => c.base)));
 
   const rows = useMemo(() => {
+    console.log("DEBUG: Admin Entries Page Data", { entries, users });
     return entries
-      .map((e) => ({ e, u: users.find((u) => u.id === e.collectorId) }))
+      .map((e) => {
+        const u = users.find((u) => u.id === e.collectorId);
+        console.log(
+          `DEBUG: Mapping entry ${e.id} with collectorId ${e.collectorId}. Found profile:`,
+          u,
+        );
+        return { e, u };
+      })
       .filter(({ e, u }) => {
-        if (!u) return false;
         if (date && e.date !== date) return false;
-        if (base && u.base !== base) return false;
-        if (collector && u.id !== collector) return false;
+        if (base && (!u || u.base !== base)) return false;
+        if (collector && (!u || u.id !== collector)) return false;
         if (train && !e.trainNumber.includes(train)) return false;
         return true;
       })
@@ -130,9 +139,11 @@ function AdminEntriesPage() {
             {rows.map(({ e, u }) => (
               <tr key={e.id} className="hover:bg-muted/40">
                 <td className="whitespace-nowrap px-3 py-3 font-medium">{formatDate(e.date)}</td>
-                <td className="whitespace-nowrap px-3 py-3">{u?.name}</td>
                 <td className="whitespace-nowrap px-3 py-3">
-                  <span className="chip">{u?.base}</span>
+                  {u?.name || e.collectorName || `TC (${e.collectorId.slice(0, 6)})`}
+                </td>
+                <td className="whitespace-nowrap px-3 py-3">
+                  <span className="chip">{u?.base || e.collectorBase || "N/A"}</span>
                 </td>
                 <td className="whitespace-nowrap px-3 py-3 font-mono font-semibold">
                   {e.trainNumber}

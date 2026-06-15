@@ -21,6 +21,8 @@ export interface FineCategory {
 export interface Entry {
   id?: string;
   collectorId: string;
+  collectorName?: string;
+  collectorBase?: string;
   date: string;
   trainNumber: string;
   working: WorkingStatus;
@@ -36,13 +38,10 @@ export interface Entry {
 }
 
 export async function fetchMyEntries(uid: string): Promise<Entry[]> {
-  const q = query(
-    collection(db, "entries"),
-    where("collectorId", "==", uid),
-    orderBy("date", "desc"),
-  );
+  const q = query(collection(db, "entries"), where("collectorId", "==", uid));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Entry);
+  const entries = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Entry);
+  return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export async function submitEntry(entry: Omit<Entry, "id" | "createdAt">) {

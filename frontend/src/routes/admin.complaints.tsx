@@ -54,10 +54,11 @@ function AdminComplaintsPage() {
     [complaints, users, q, status],
   );
 
-  async function update(id: string, s: ComplaintStatus) {
+  async function update(id: string | undefined, s: ComplaintStatus) {
+    if (!id) return;
     await updateComplaintStatus(id, s);
     toast.success(`Marked as ${s}`);
-    queryClient.invalidateQueries(["admin", "complaints"]);
+    queryClient.invalidateQueries({ queryKey: ["admin", "complaints"] });
   }
 
   return (
@@ -97,7 +98,8 @@ function AdminComplaintsPage() {
                   </div>
                   <div className="mt-0.5 truncate text-base font-semibold">{c.category}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {u?.name} ({u?.empId}) · Train {c.train}
+                    {u?.name || c.collectorName || `TC (${c.collectorId.slice(0, 6)})`}
+                    {u?.empId ? ` (${u.empId})` : ""} · Train {c.train}
                     {c.station && <> · {c.station}</>}
                   </div>
                 </div>

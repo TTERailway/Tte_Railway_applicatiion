@@ -16,6 +16,8 @@ export type ComplaintPriority = "Low" | "Medium" | "High";
 export interface Complaint {
   id?: string;
   collectorId: string;
+  collectorName?: string;
+  collectorBase?: string;
   number: number;
   category: string;
   train: string;
@@ -27,13 +29,10 @@ export interface Complaint {
 }
 
 export async function fetchMyComplaints(uid: string): Promise<Complaint[]> {
-  const q = query(
-    collection(db, "complaints"),
-    where("collectorId", "==", uid),
-    orderBy("number", "desc"),
-  );
+  const q = query(collection(db, "complaints"), where("collectorId", "==", uid));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Complaint);
+  const complaints = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Complaint);
+  return complaints.sort((a, b) => b.number - a.number);
 }
 
 export async function submitComplaint(

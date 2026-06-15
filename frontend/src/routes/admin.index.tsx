@@ -34,7 +34,9 @@ function AdminDashboard() {
   const { data: users = [] } = useQuery({ queryKey: ["admin", "users"], queryFn: fetchAllUsers });
 
   const stats = useMemo(() => {
-    const collectors = users.filter((u) => u.role === "tc").length;
+    const collectors = users.filter(
+      (u) => u.role?.toLowerCase() === "tc" || u.role?.toLowerCase() === "collector",
+    ).length;
     const todayEntries = entries.filter((e) => e.date === today);
     const revenue = todayEntries.reduce((a, e) => a + e.totalAmount, 0);
     const cases = todayEntries.reduce((a, e) => a + e.totalCases, 0);
@@ -129,7 +131,10 @@ function AdminDashboard() {
                     #{c.number} · {c.category}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {collectorName(c.collectorId)} · Train {c.train}
+                    {users.find((u) => u.id === c.collectorId)?.name ||
+                      c.collectorName ||
+                      `TC (${c.collectorId.slice(0, 6)})`}{" "}
+                    · Train {c.train}
                   </div>
                 </div>
                 <span className="chip">{c.status}</span>
@@ -144,7 +149,10 @@ function AdminDashboard() {
               <li key={e.id} className="flex items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">
-                    {collectorName(e.collectorId)} · Train {e.trainNumber}
+                    {users.find((u) => u.id === e.collectorId)?.name ||
+                      e.collectorName ||
+                      `TC (${e.collectorId.slice(0, 6)})`}{" "}
+                    · Train {e.trainNumber}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {formatDate(e.date)} · {e.totalCases} cases

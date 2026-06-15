@@ -77,6 +77,8 @@ function NewEntryPage() {
     }
     await submitEntry({
       collectorId: user.uid,
+      collectorName: profile.name,
+      collectorBase: profile.base,
       date: new Date().toISOString().slice(0, 10),
       trainNumber: train.trim(),
       working,

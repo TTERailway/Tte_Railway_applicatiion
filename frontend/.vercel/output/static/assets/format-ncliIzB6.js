@@ -1,0 +1,1 @@
+function e(e){return`₹`+e.toLocaleString(`en-IN`)}function t(e){return new Date(e).toLocaleDateString(`en-IN`,{day:`2-digit`,month:`short`,year:`numeric`})}export{e as n,t};

@@ -39,12 +39,15 @@ function NewComplaintPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!user || !profile) return;
     if (!train.trim() || !description.trim()) {
       toast.error("Please fill required fields");
       return;
     }
     const number = await submitComplaint({
       collectorId: user.uid,
+      collectorName: profile.name,
+      collectorBase: profile.base,
       category,
       train: train.trim(),
       station: station.trim(),

@@ -13,14 +13,17 @@ export const Route = createFileRoute("/admin/users")({
 function AdminUsersPage() {
   const queryClient = useQueryClient();
   const { data: users = [] } = useQuery({ queryKey: ["admin", "users"], queryFn: fetchAllUsers });
+  console.log("DEBUG: Admin Users List:", users);
 
-  const collectors = users.filter((u) => u.role === "tc");
+  const collectors = users.filter(
+    (u) => u.role?.toLowerCase() === "tc" || u.role?.toLowerCase() === "collector",
+  );
 
   async function toggleStatus(u: (typeof collectors)[number]) {
     const nextStatus = u.status === "active" ? "disabled" : "active";
     await updateUserStatus(u.id, nextStatus);
     toast.success(`${u.name} ${nextStatus === "active" ? "enabled" : "disabled"}`);
-    queryClient.invalidateQueries(["admin", "users"]);
+    queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
   }
 
   return (
