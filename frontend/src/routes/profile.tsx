@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CollectorLayout } from "@/components/CollectorLayout";
 import { useAuth } from "@/services/AuthContext";
 import { formatDate } from "@/lib/format";
-import { Mail, Phone, MapPin, BadgeCheck, Calendar, Pencil, KeyRound } from "lucide-react";
+import { Mail, Phone, MapPin, BadgeCheck, Calendar, Pencil, KeyRound, LogOut } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({ meta: [{ title: "Profile · TC System" }] }),
@@ -10,7 +11,8 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { profile, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const { profile, loading: authLoading, logout } = useAuth();
   if (authLoading || !profile) return null;
   const initials = profile.name
     .split(" ")
@@ -55,6 +57,16 @@ function ProfilePage() {
           </button>
           <button className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-semibold hover:bg-muted">
             <KeyRound className="h-4 w-4" /> Change password
+          </button>
+          <button
+            onClick={async () => {
+              await logout();
+              toast.success("Logged out successfully");
+              navigate({ to: "/" });
+            }}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 text-destructive py-3 text-sm font-semibold hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="h-4 w-4" /> Logout
           </button>
         </div>
       </div>

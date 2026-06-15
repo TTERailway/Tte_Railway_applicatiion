@@ -51,6 +51,13 @@ export function CollectorLayout({ children }: { children: ReactNode }) {
             </button>
             <button
               onClick={() => setConfirmLogout(true)}
+              aria-label="Logout"
+              className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-muted md:hidden"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setConfirmLogout(true)}
               className="hidden md:inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
             >
               <LogOut className="h-4 w-4" /> Logout
