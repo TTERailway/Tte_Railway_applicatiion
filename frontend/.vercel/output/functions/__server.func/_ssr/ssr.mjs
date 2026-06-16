@@ -23,7 +23,7 @@ function consumeLastCapturedError() {
 }
 var serverEntryPromise;
 async function getServerEntry() {
-	if (!serverEntryPromise) serverEntryPromise = import("./server-BmLcj7CA.mjs").then((m) => m.default ?? m);
+	if (!serverEntryPromise) serverEntryPromise = import("./server-D_9uCXRN.mjs").then((m) => m.default ?? m);
 	return serverEntryPromise;
 }
 async function normalizeCatastrophicSsrResponse(response) {
@@ -33,7 +33,8 @@ async function normalizeCatastrophicSsrResponse(response) {
 	if (!body.includes("\"unhandled\":true") || !body.includes("\"message\":\"HTTPError\"")) return response;
 	const err = consumeLastCapturedError() ?? /* @__PURE__ */ new Error(`h3 swallowed SSR error: ${body}`);
 	console.error(err);
-	return new Response(`<html><body><h1>Catastrophic SSR Error</h1><pre>${err.stack}</pre></body></html>`, {
+	const stack = err instanceof Error ? err.stack : String(err);
+	return new Response(`<html><body><h1>Catastrophic SSR Error</h1><pre>${stack}</pre></body></html>`, {
 		status: 500,
 		headers: { "content-type": "text/html; charset=utf-8" }
 	});

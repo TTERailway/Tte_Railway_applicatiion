@@ -11,8 +11,11 @@ import {
 // Read Firebase config from Vite env variables or process.env fallback.
 // Provide these values in a `.env` at the project root.
 const getEnv = (key: string) => {
-  if (typeof import.meta !== "undefined" && (import.meta as any).env) {
-    return (import.meta as any).env[key];
+  if (typeof import.meta !== "undefined") {
+    const env = (import.meta as { env?: Record<string, string> }).env;
+    if (env) {
+      return env[key];
+    }
   }
   return process.env[key];
 };

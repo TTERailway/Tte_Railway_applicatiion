@@ -19,13 +19,13 @@ export interface User {
 export async function fetchAllUsers(): Promise<User[]> {
   const q = collection(db, "users");
   const snap = await getDocs(q);
-  const users = snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as User) }));
+  const users = snap.docs.map((docSnap) => ({ ...(docSnap.data() as User), id: docSnap.id }));
   return users.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
 export async function fetchUserById(id: string): Promise<User | null> {
   const snap = await getDoc(doc(db, "users", id));
-  return snap.exists() ? { id: snap.id, ...(snap.data() as User) } : null;
+  return snap.exists() ? { ...(snap.data() as User), id: snap.id } : null;
 }
 
 export async function updateUserStatus(id: string, status: UserStatus) {
