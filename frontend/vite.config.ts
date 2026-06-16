@@ -23,4 +23,6 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  ssr: {
+    noExternal: ['firebase', 'firebase/auth', 'firebase/app', 'firebase/firestore']}
 });
