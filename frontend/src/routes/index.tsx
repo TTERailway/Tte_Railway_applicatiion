@@ -16,7 +16,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const { user, profile, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("collector@railway.gov.in");
-  const [password, setPassword] = useState("railway123");
+  const [password, setPassword] = useState("collector123");
   const [show, setShow] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
