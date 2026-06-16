@@ -32,10 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let p = await fetchProfile(u.uid);
         if (!p && u.email) {
           try {
-            console.log("No profile found for uid, creating default...");
             p = await createDefaultProfile(u.uid, u.email);
           } catch (e) {
-            console.error("Error creating default profile:", e);
+            // Failed to create default profile
           }
         }
         setProfile(p);

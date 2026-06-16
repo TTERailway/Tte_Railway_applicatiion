@@ -38,8 +38,8 @@ function AdminDashboard() {
       (u) => u.role?.toLowerCase() === "tc" || u.role?.toLowerCase() === "collector",
     ).length;
     const todayEntries = entries.filter((e) => e.date === today);
-    const revenue = todayEntries.reduce((a, e) => a + e.totalAmount, 0);
-    const cases = todayEntries.reduce((a, e) => a + e.totalCases, 0);
+    const revenue = todayEntries.reduce((a, e) => a + (e.totalAmount ?? 0), 0);
+    const cases = todayEntries.reduce((a, e) => a + (e.totalCases ?? 0), 0);
     const open = complaints.filter((c) => c.status !== "Resolved" && c.status !== "Closed").length;
     const closed = complaints.filter(
       (c) => c.status === "Resolved" || c.status === "Closed",
@@ -49,7 +49,6 @@ function AdminDashboard() {
 
   const recentComplaints = complaints.slice(0, 5);
   const recentEntries = entries.slice(0, 5);
-  const collectorName = (id: string) => users.find((u) => u.id === id)?.name ?? "—";
 
   const cards = [
     { label: "Total Collectors", value: stats.collectors, icon: Users, tone: "primary" as const },
@@ -133,7 +132,7 @@ function AdminDashboard() {
                   <div className="truncate text-xs text-muted-foreground">
                     {users.find((u) => u.id === c.collectorId)?.name ||
                       c.collectorName ||
-                      `TC (${c.collectorId.slice(0, 6)})`}{" "}
+                      (c.collectorId ? `TC (${c.collectorId.slice(0, 6)})` : "Unknown TC")}{" "}
                     · Train {c.train}
                   </div>
                 </div>
@@ -151,15 +150,15 @@ function AdminDashboard() {
                   <div className="truncate text-sm font-semibold">
                     {users.find((u) => u.id === e.collectorId)?.name ||
                       e.collectorName ||
-                      `TC (${e.collectorId.slice(0, 6)})`}{" "}
+                      (e.collectorId ? `TC (${e.collectorId.slice(0, 6)})` : "Unknown TC")}{" "}
                     · Train {e.trainNumber}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {formatDate(e.date)} · {e.totalCases} cases
+                    {formatDate(e.date)} · {e.totalCases ?? 0} cases
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-bold text-primary">{formatINR(e.totalAmount)}</div>
+                  <div className="text-sm font-bold text-primary">{formatINR(e.totalAmount ?? 0)}</div>
                 </div>
               </li>
             ))}

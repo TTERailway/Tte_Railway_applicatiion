@@ -13,7 +13,6 @@ export const Route = createFileRoute("/admin/users")({
 function AdminUsersPage() {
   const queryClient = useQueryClient();
   const { data: users = [] } = useQuery({ queryKey: ["admin", "users"], queryFn: fetchAllUsers });
-  console.log("DEBUG: Admin Users List:", users);
 
   const collectors = users.filter(
     (u) => u.role?.toLowerCase() === "tc" || u.role?.toLowerCase() === "collector",

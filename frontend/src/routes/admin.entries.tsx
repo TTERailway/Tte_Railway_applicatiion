@@ -30,14 +30,9 @@ function AdminEntriesPage() {
   const bases = Array.from(new Set(collectors.map((c) => c.base)));
 
   const rows = useMemo(() => {
-    console.log("DEBUG: Admin Entries Page Data", { entries, users });
     return entries
       .map((e) => {
         const u = users.find((u) => u.id === e.collectorId);
-        console.log(
-          `DEBUG: Mapping entry ${e.id} with collectorId ${e.collectorId}. Found profile:`,
-          u,
-        );
         return { e, u };
       })
       .filter(({ e, u }) => {
@@ -140,7 +135,7 @@ function AdminEntriesPage() {
               <tr key={e.id} className="hover:bg-muted/40">
                 <td className="whitespace-nowrap px-3 py-3 font-medium">{formatDate(e.date)}</td>
                 <td className="whitespace-nowrap px-3 py-3">
-                  {u?.name || e.collectorName || `TC (${e.collectorId.slice(0, 6)})`}
+                  {u?.name || e.collectorName || (e.collectorId ? `TC (${e.collectorId.slice(0, 6)})` : "Unknown TC")}
                 </td>
                 <td className="whitespace-nowrap px-3 py-3">
                   <span className="chip">{u?.base || e.collectorBase || "N/A"}</span>
@@ -151,12 +146,12 @@ function AdminEntriesPage() {
                 <td className="whitespace-nowrap px-3 py-3">
                   <span className="chip">{e.working}</span>
                 </td>
-                <td className="px-3 py-3">{e.A.cases}</td>
-                <td className="px-3 py-3">{e.B.cases}</td>
-                <td className="px-3 py-3">{e.C.cases}</td>
-                <td className="px-3 py-3">{e.D.cases}</td>
-                <td className="px-3 py-3">{e.E.cases}</td>
-                <td className="px-3 py-3">{e.smoking.cases}</td>
+                <td className="px-3 py-3">{e.A?.cases ?? 0}</td>
+                <td className="px-3 py-3">{e.B?.cases ?? 0}</td>
+                <td className="px-3 py-3">{e.C?.cases ?? 0}</td>
+                <td className="px-3 py-3">{e.D?.cases ?? 0}</td>
+                <td className="px-3 py-3">{e.E?.cases ?? 0}</td>
+                <td className="px-3 py-3">{e.smoking?.cases ?? 0}</td>
                 <td className="px-3 py-3 font-semibold">{e.totalCases}</td>
                 <td className="px-3 py-3 font-bold text-primary">{formatINR(e.totalAmount)}</td>
               </tr>
