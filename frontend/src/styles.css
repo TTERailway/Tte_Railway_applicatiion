@@ -131,3 +131,9 @@
   background: var(--color-primary-soft);
   color: var(--color-primary);
 }
+
+/* Add this to your styles.css (inside @layer components or at the end) */
+
+.field-input {
+  @apply w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30;
+}

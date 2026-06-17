@@ -1,5 +1,13 @@
-import { collection, getDocs, query, orderBy, getDoc, doc, updateDoc } from "firebase/firestore";
-import { db } from "./config";
+import {
+  collection,
+  getDocs,
+  getDoc,
+  doc,
+  updateDoc,
+  setDoc,
+} from "firebase/firestore";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "./config";
 
 export type UserRole = "admin" | "tc";
 export type UserStatus = "active" | "disabled";
@@ -7,7 +15,8 @@ export type UserStatus = "active" | "disabled";
 export interface User {
   id: string;
   name: string;
-  empId: string;
+  pfNo: string;      // PF Number (alphanumeric)
+  empId: string;     // legacy employee ID
   email: string;
   mobile: string;
   base: string;
@@ -17,9 +26,8 @@ export interface User {
 }
 
 export async function fetchAllUsers(): Promise<User[]> {
-  const q = collection(db, "users");
-  const snap = await getDocs(q);
-  const users = snap.docs.map((docSnap) => ({ ...(docSnap.data() as User), id: docSnap.id }));
+  const snap = await getDocs(collection(db, "users"));
+  const users = snap.docs.map((d) => ({ ...(d.data() as User), id: d.id }));
   return users.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
@@ -30,4 +38,29 @@ export async function fetchUserById(id: string): Promise<User | null> {
 
 export async function updateUserStatus(id: string, status: UserStatus) {
   await updateDoc(doc(db, "users", id), { status });
+}
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  password: string;
+  pfNo: string;
+  mobile: string;
+  base: string;
+  joining?: string;
+  role: UserRole;
+}
+
+export async function createTCUser(payload: CreateUserPayload): Promise<string> {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error ?? "Failed to create user");
+  }
+  const data = await res.json();
+  return data.uid;
 }

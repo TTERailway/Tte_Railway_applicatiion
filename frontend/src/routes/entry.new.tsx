@@ -1,18 +1,28 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CollectorLayout } from "@/components/CollectorLayout";
 import { useAuth } from "@/services/AuthContext";
-import { submitEntry, type WorkingStatus, type FineCategory } from "@/services/entries";
-import { useMemo, useState } from "react";
+import {
+  saveDraftEntry,
+  updateDraftEntry,
+  submitEntries,
+  type FineCategory,
+  type WorkingIn,
+  type SquadName,
+  type Entry,
+} from "@/services/entries";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
-  Save,
+  Plus,
+  Minus,
+  Send,
   Train,
-  User,
-  Phone,
-  MapPin,
+  Trash2,
+  Save,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
   IndianRupee,
-  Briefcase,
-  Cloud,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatINR } from "@/lib/format";
@@ -22,221 +32,573 @@ export const Route = createFileRoute("/entry/new")({
   component: NewEntryPage,
 });
 
-const WORKING_OPTIONS: WorkingStatus[] = [
-  "VIRAT",
-  "OPEN",
-  "REST",
-  "LEAVE",
-  "VEDANT",
-  "SQD",
-  "LAP",
-  "SICK",
+const WORKING_IN_OPTIONS: WorkingIn[] = ["SQD", "LINK", "stn"];
+
+const SQUAD_OPTIONS: SquadName[] = [
+  "VIRAT", "VEDANT", "VIJAY", "VIKRANT", "VIHAN",
+  "OPEN", "ALFA", "BRAVO", "CHARLI", "TEJAS",
 ];
 
+const TRAIN_STATUSES = ["REST", "LAP", "CL", "SCL", "CCL", "LEAVE", "SICK", "ML", "STN"];
+
 const CATEGORIES = [
-  { key: "A", label: "A Case", hint: "WT / fare evader" },
-  { key: "B", label: "B Case", hint: "Excess fare" },
-  { key: "C", label: "C Case", hint: "Without proper ticket" },
-  { key: "D", label: "D Case", hint: "Luggage / parcel" },
-  { key: "E", label: "E Case", hint: "Other" },
-  { key: "smoking", label: "Smoking Case", hint: "Smoking on board" },
+  { key: "A" as const, label: "A Case", color: "bg-blue-500",   hint: "WT / Fare evader" },
+  { key: "B" as const, label: "B Case", color: "bg-violet-500", hint: "Excess fare" },
+  { key: "C" as const, label: "C Case", color: "bg-amber-500",  hint: "Without ticket" },
+  { key: "D" as const, label: "D Case", color: "bg-orange-500", hint: "Luggage / parcel" },
+  { key: "E" as const, label: "E Case", color: "bg-teal-500",   hint: "Other" },
+  { key: "smoking" as const, label: "Smoking", color: "bg-red-500", hint: "Smoking on board" },
 ] as const;
 
 type CatKey = (typeof CATEGORIES)[number]["key"];
 
-function NewEntryPage() {
-  const { user, profile, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
-  const [train, setTrain] = useState("");
-  const [working, setWorking] = useState<WorkingStatus>("VIRAT");
-  const [cats, setCats] = useState<Record<CatKey, FineCategory>>({
-    A: { cases: 0, amount: 0 },
-    B: { cases: 0, amount: 0 },
-    C: { cases: 0, amount: 0 },
-    D: { cases: 0, amount: 0 },
-    E: { cases: 0, amount: 0 },
-    smoking: { cases: 0, amount: 0 },
-  });
+function emptyFine(): FineCategory { return { cases: 0, amount: 0 }; }
 
-  const totals = useMemo(() => {
-    const tc = Object.values(cats).reduce((a, c) => a + (c.cases || 0), 0);
-    const ta = Object.values(cats).reduce((a, c) => a + (c.amount || 0), 0);
-    return { tc, ta };
-  }, [cats]);
+interface TrainRow {
+  localId: string;
+  firestoreId?: string;
+  trainNumber: string;
+  workingIn: WorkingIn;
+  squadName: SquadName | "";
+  A: FineCategory; B: FineCategory; C: FineCategory;
+  D: FineCategory; E: FineCategory; smoking: FineCategory;
+  saving: boolean;
+  saved: boolean;
+  expanded: boolean;
+}
 
-  function update(key: CatKey, field: "cases" | "amount", v: string) {
-    const num = v === "" ? 0 : Math.max(0, parseInt(v, 10) || 0);
-    setCats((c) => ({ ...c, [key]: { ...c[key], [field]: num } }));
-  }
+function newRow(): TrainRow {
+  return {
+    localId: crypto.randomUUID(),
+    trainNumber: "",
+    workingIn: "SQD",
+    squadName: "",
+    A: emptyFine(), B: emptyFine(), C: emptyFine(),
+    D: emptyFine(), E: emptyFine(), smoking: emptyFine(),
+    saving: false, saved: false, expanded: true,
+  };
+}
 
-  async function submit() {
-    if (authLoading || !user || !profile) return;
-    if (!train.trim()) {
-      toast.error("Please enter the train number");
-      return;
-    }
-    await submitEntry({
-      collectorId: user.uid,
-      collectorName: profile.name,
-      collectorBase: profile.base,
-      date: new Date().toISOString().slice(0, 10),
-      trainNumber: train.trim(),
-      working,
-      A: cats.A,
-      B: cats.B,
-      C: cats.C,
-      D: cats.D,
-      E: cats.E,
-      smoking: cats.smoking,
-      totalCases: totals.tc,
-      totalAmount: totals.ta,
-    });
-    toast.success("Daily entry saved", {
-      description: `${totals.tc} cases · ${formatINR(totals.ta)}`,
-    });
-    navigate({ to: "/entries" });
-  }
+function rowTotals(row: TrainRow) {
+  const cats: FineCategory[] = [row.A, row.B, row.C, row.D, row.E, row.smoking];
+  return {
+    cases: cats.reduce((a, c) => a + (c.cases || 0), 0),
+    amount: cats.reduce((a, c) => a + (c.amount || 0), 0),
+  };
+}
 
-  if (authLoading || !user || !profile) return null;
+function isStatusOnly(train: string) {
+  return TRAIN_STATUSES.includes(train.toUpperCase().trim());
+}
+
+// ── Amount input dialog (shows when TC long-presses a category) ──────────────
+function AmountModal({
+  label,
+  value,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  value: number;
+  onSave: (v: number) => void;
+  onClose: () => void;
+}) {
+  const [val, setVal] = useState(value === 0 ? "" : String(value));
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-xs rounded-2xl bg-card p-5 shadow-elevated">
+        <h3 className="mb-3 text-base font-bold">{label} — Fine Amount</h3>
+        <div className="flex items-center gap-2 rounded-xl border border-input bg-background px-3 py-3 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
+          <IndianRupee className="h-4 w-4 text-muted-foreground" />
+          <input
+            autoFocus
+            inputMode="numeric"
+            value={val}
+            onChange={(e) => setVal(e.target.value.replace(/\D/g, ""))}
+            placeholder="0"
+            className="flex-1 bg-transparent text-xl font-bold outline-none"
+          />
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold hover:bg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => { onSave(parseInt(val, 10) || 0); onClose(); }}
+            className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tally counter card for one category ───────────────────────────────────────
+function CategoryCounter({
+  cat,
+  value,
+  onIncrement,
+  onDecrement,
+  onAmountChange,
+}: {
+  cat: (typeof CATEGORIES)[number];
+  value: FineCategory;
+  onIncrement: () => void;
+  onDecrement: () => void;
+  onAmountChange: (v: number) => void;
+}) {
+  const [showAmt, setShowAmt] = useState(false);
+  const active = value.cases > 0;
 
   return (
-    <CollectorLayout>
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold">New Daily Entry</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Fields auto-save as draft. Submit when complete.
-        </p>
-        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
-          <Cloud className="h-3.5 w-3.5" /> Draft autosaved
+    <>
+      <div
+        className={`rounded-2xl border p-4 transition-all select-none ${
+          active
+            ? "border-primary/40 bg-primary-soft shadow-card"
+            : "border-border bg-card"
+        }`}
+      >
+        {/* Header */}
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className={`h-2.5 w-2.5 rounded-full ${cat.color}`} />
+              <span className="text-sm font-bold">{cat.label}</span>
+            </div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">{cat.hint}</div>
+          </div>
+          {/* Amount badge — tap to edit */}
+          <button
+            onClick={() => setShowAmt(true)}
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+              value.amount > 0
+                ? "bg-primary text-primary-foreground"
+                : "border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
+            }`}
+          >
+            {value.amount > 0 ? formatINR(value.amount) : "Set ₹"}
+          </button>
+        </div>
+
+        {/* Tally counter */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onDecrement}
+            disabled={value.cases === 0}
+            className="grid h-11 w-11 place-items-center rounded-xl border border-border bg-background text-foreground transition-colors hover:bg-muted active:scale-95 disabled:opacity-30"
+          >
+            <Minus className="h-5 w-5" />
+          </button>
+
+          <div className="flex-1 text-center">
+            <div className={`text-4xl font-black tabular-nums ${active ? "text-primary" : "text-muted-foreground"}`}>
+              {value.cases}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">cases</div>
+          </div>
+
+          {/* Big + button — this is the main action */}
+          <button
+            onClick={onIncrement}
+            className="grid h-14 w-14 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-card transition-transform active:scale-95"
+          >
+            <Plus className="h-7 w-7" />
+          </button>
         </div>
       </div>
 
-      {/* Card 1: Auto-filled info */}
-      <Section title="Your Details" subtitle="Auto-filled from profile">
-        <Grid>
-          <Field icon={<User className="h-4 w-4" />} label="Collector">
-            {profile.name}
-          </Field>
-          <Field icon={<MapPin className="h-4 w-4" />} label="Base">
-            {profile.base}
-          </Field>
-          <Field icon={<Phone className="h-4 w-4" />} label="Mobile">
-            {profile.mobile}
-          </Field>
-          <Field icon={<Briefcase className="h-4 w-4" />} label="Date">
-            {new Date().toLocaleDateString("en-IN", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })}
-          </Field>
-        </Grid>
-      </Section>
+      {showAmt && (
+        <AmountModal
+          label={cat.label}
+          value={value.amount}
+          onSave={onAmountChange}
+          onClose={() => setShowAmt(false)}
+        />
+      )}
+    </>
+  );
+}
 
-      {/* Card 2: Train info */}
-      <Section title="Train Information">
-        <div className="space-y-4">
-          <div>
-            <Label>Train Number</Label>
-            <div className="flex items-center gap-2 rounded-xl border border-input bg-background px-3 py-3 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
-              <Train className="h-5 w-5 text-muted-foreground" />
-              <input
-                value={train}
-                onChange={(e) => setTrain(e.target.value)}
-                inputMode="numeric"
-                placeholder="e.g. 22973"
-                className="flex-1 bg-transparent text-lg font-semibold tracking-wide outline-none"
-              />
-            </div>
-          </div>
-          <div>
-            <Label>Working Status</Label>
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              {WORKING_OPTIONS.map((w) => {
-                const active = working === w;
-                return (
+// ── Main page ──────────────────────────────────────────────────────────────────
+function NewEntryPage() {
+  const { user, profile, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [rows, setRows] = useState<TrainRow[]>([newRow()]);
+  const [submitting, setSubmitting] = useState(false);
+  // Track which row is currently "active" (expanded for tally entry)
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => () => { Object.values(saveTimers.current).forEach(clearTimeout); }, []);
+
+  if (authLoading || !user || !profile) return null;
+
+  // ── Row state helpers ──
+  function setRow(localId: string, patch: Partial<TrainRow>) {
+    setRows((rs) => rs.map((r) => r.localId === localId ? { ...r, ...patch } : r));
+  }
+
+  // ── Auto-save with debounce ──
+  const triggerSave = useCallback(async (localId: string, latestRows: TrainRow[]) => {
+    const row = latestRows.find((r) => r.localId === localId);
+    if (!row) return;
+
+    setRows((rs) => rs.map((r) => r.localId === localId ? { ...r, saving: true } : r));
+
+    const { cases, amount } = rowTotals(row);
+    const payload: Omit<Entry, "id" | "createdAt" | "submittedAt"> = {
+      collectorId: user.uid,
+      collectorName: profile.name,
+      collectorBase: profile.base,
+      pfNo: profile.pfNo ?? "",
+      date: today,
+      trainNumber: row.trainNumber || "—",
+      workingIn: row.workingIn,
+      squadName: row.squadName as SquadName,
+      A: row.A, B: row.B, C: row.C, D: row.D, E: row.E, smoking: row.smoking,
+      totalCases: cases,
+      totalAmount: amount,
+      status: "draft",
+    };
+
+    try {
+      if (row.firestoreId) {
+        await updateDraftEntry(row.firestoreId, payload);
+        setRows((rs) => rs.map((r) => r.localId === localId ? { ...r, saving: false, saved: true } : r));
+      } else {
+        const id = await saveDraftEntry(payload);
+        setRows((rs) => rs.map((r) => r.localId === localId ? { ...r, saving: false, saved: true, firestoreId: id } : r));
+      }
+    } catch {
+      setRows((rs) => rs.map((r) => r.localId === localId ? { ...r, saving: false } : r));
+      toast.error("Auto-save failed");
+    }
+  }, [user, profile, today]);
+
+  function scheduleSave(localId: string, updatedRows: TrainRow[]) {
+    clearTimeout(saveTimers.current[localId]);
+    // Save immediately on every tally tap (500ms debounce to batch rapid taps)
+    saveTimers.current[localId] = setTimeout(() => triggerSave(localId, updatedRows), 500);
+  }
+
+  // ── Tally increment / decrement ──
+  function increment(localId: string, key: CatKey) {
+    setRows((rs) => {
+      const next = rs.map((r) =>
+        r.localId === localId
+          ? { ...r, [key]: { ...r[key], cases: (r[key].cases || 0) + 1 } }
+          : r
+      );
+      scheduleSave(localId, next);
+      return next;
+    });
+  }
+
+  function decrement(localId: string, key: CatKey) {
+    setRows((rs) => {
+      const next = rs.map((r) =>
+        r.localId === localId
+          ? { ...r, [key]: { ...r[key], cases: Math.max(0, (r[key].cases || 0) - 1) } }
+          : r
+      );
+      scheduleSave(localId, next);
+      return next;
+    });
+  }
+
+  function setAmount(localId: string, key: CatKey, amount: number) {
+    setRows((rs) => {
+      const next = rs.map((r) =>
+        r.localId === localId ? { ...r, [key]: { ...r[key], amount } } : r
+      );
+      scheduleSave(localId, next);
+      return next;
+    });
+  }
+
+  function updateMeta(localId: string, patch: Partial<TrainRow>) {
+    setRows((rs) => {
+      const next = rs.map((r) => r.localId === localId ? { ...r, ...patch } : r);
+      scheduleSave(localId, next);
+      return next;
+    });
+  }
+
+  async function manualSave(localId: string) {
+    clearTimeout(saveTimers.current[localId]);
+    await triggerSave(localId, rows);
+    toast.success("Saved as draft");
+  }
+
+  async function handleSubmitAll() {
+    // Force-save any unsaved rows
+    const unsaved = rows.filter((r) => !r.saved && r.trainNumber);
+    if (unsaved.length) {
+      await Promise.all(unsaved.map((r) => triggerSave(r.localId, rows)));
+    }
+    const ids = rows.map((r) => r.firestoreId).filter(Boolean) as string[];
+    if (!ids.length) { toast.error("No saved rows to submit"); return; }
+
+    setSubmitting(true);
+    try {
+      await submitEntries(ids);
+      const grandCases = rows.reduce((a, r) => a + rowTotals(r).cases, 0);
+      const grandAmt   = rows.reduce((a, r) => a + rowTotals(r).amount, 0);
+      toast.success(`${ids.length} entries submitted`, {
+        description: `${grandCases} cases · ${formatINR(grandAmt)}`,
+      });
+      navigate({ to: "/entries" });
+    } catch {
+      toast.error("Submit failed — please retry");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const grandCases = rows.reduce((a, r) => a + rowTotals(r).cases, 0);
+  const grandAmt   = rows.reduce((a, r) => a + rowTotals(r).amount, 0);
+
+  return (
+    <CollectorLayout>
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold">New Daily Entry</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tap <strong>+</strong> each time you catch a case — it saves instantly.
+        </p>
+      </div>
+
+      {/* Profile bar */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm">
+        <span className="font-semibold">{profile.name}</span>
+        <span className="text-muted-foreground">·</span>
+        <span className="chip">{profile.base}</span>
+        {profile.pfNo && (
+          <span className="font-mono text-xs text-muted-foreground">{profile.pfNo}</span>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+        </span>
+      </div>
+
+      {/* Train rows */}
+      <div className="space-y-4">
+        {rows.map((row, idx) => {
+          const { cases, amount } = rowTotals(row);
+          const statusOnly = isStatusOnly(row.trainNumber);
+
+          return (
+            <div
+              key={row.localId}
+              className={`rounded-2xl border bg-background shadow-card transition-colors ${
+                row.saved ? "border-primary/30" : "border-border"
+              }`}
+            >
+              {/* ── Row header ── */}
+              <div className="flex items-center gap-2 px-4 py-3">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {idx + 1}
+                </div>
+
+                {/* Train number */}
+                <div className="flex flex-1 items-center gap-2 rounded-xl border border-input bg-card px-3 py-2 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
+                  <Train className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <input
+                    value={row.trainNumber}
+                    onChange={(e) => updateMeta(row.localId, { trainNumber: e.target.value })}
+                    placeholder="Train no. or status…"
+                    className="flex-1 bg-transparent text-sm font-bold tracking-wide outline-none"
+                  />
+                </div>
+
+                {/* Save indicator */}
+                {row.saving ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+                ) : row.saved ? (
+                  <Check className="h-4 w-4 shrink-0 text-primary" />
+                ) : null}
+
+                {/* Collapse / expand */}
+                <button
+                  onClick={() => setRow(row.localId, { expanded: !row.expanded })}
+                  className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted"
+                >
+                  {row.expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+
+                {/* Delete row */}
+                {rows.length > 1 && (
                   <button
-                    key={w}
-                    type="button"
-                    onClick={() => setWorking(w)}
-                    className={`shrink-0 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
-                      active
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card text-foreground hover:bg-muted"
-                    }`}
+                    onClick={() => setRows((rs) => rs.filter((r) => r.localId !== row.localId))}
+                    className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   >
-                    {active && <Check className="mr-1 inline h-3.5 w-3.5" />}
-                    {w}
+                    <Trash2 className="h-4 w-4" />
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      {/* Card 3: Categories */}
-      <Section title="Fine Categories" subtitle="Tap a category to record cases and fine collected">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {CATEGORIES.map((cat) => {
-            const v = cats[cat.key];
-            const filled = v.cases > 0 || v.amount > 0;
-            return (
-              <div
-                key={cat.key}
-                className={`rounded-xl border p-4 transition-colors ${
-                  filled ? "border-primary/40 bg-primary-soft" : "border-border bg-card"
-                }`}
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-bold">{cat.label}</div>
-                    <div className="text-[11px] text-muted-foreground">{cat.hint}</div>
-                  </div>
-                  {filled && (
-                    <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground">
-                      <Check className="h-4 w-4" />
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <NumberInput
-                    label="Cases"
-                    value={v.cases}
-                    onChange={(s) => update(cat.key, "cases", s)}
-                  />
-                  <NumberInput
-                    label="Amount"
-                    prefix="₹"
-                    value={v.amount}
-                    onChange={(s) => update(cat.key, "amount", s)}
-                  />
-                </div>
+                )}
               </div>
-            );
-          })}
-        </div>
-      </Section>
 
-      {/* Sticky summary + save */}
-      <div className="h-32 md:h-24" />
+              {row.expanded && (
+                <div className="border-t border-border px-4 pb-4 pt-3 space-y-4">
+
+                  {/* Working In + Squad */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <SectionLabel>Working In</SectionLabel>
+                      <div className="flex gap-1.5">
+                        {WORKING_IN_OPTIONS.map((w) => (
+                          <button
+                            key={w}
+                            onClick={() => updateMeta(row.localId, { workingIn: w })}
+                            className={`flex-1 rounded-lg border py-2 text-xs font-bold transition-colors ${
+                              row.workingIn === w
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-card text-foreground hover:bg-muted"
+                            }`}
+                          >
+                            {w}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <SectionLabel>Squad / Team</SectionLabel>
+                      <select
+                        value={row.squadName}
+                        onChange={(e) => updateMeta(row.localId, { squadName: e.target.value as SquadName })}
+                        className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm font-bold outline-none focus:border-ring"
+                      >
+                        <option value="">— None —</option>
+                        {SQUAD_OPTIONS.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Status shortcuts */}
+                  <div>
+                    <SectionLabel>Quick status (no train today)</SectionLabel>
+                    <div className="flex flex-wrap gap-1.5">
+                      {TRAIN_STATUSES.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => updateMeta(row.localId, { trainNumber: s })}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                            row.trainNumber === s
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-card text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── Tally counters — only show if actual train ── */}
+                  {!statusOnly && (
+                    <div>
+                      <SectionLabel>Tap + for each case you catch</SectionLabel>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {CATEGORIES.map((cat) => (
+                          <CategoryCounter
+                            key={cat.key}
+                            cat={cat}
+                            value={row[cat.key]}
+                            onIncrement={() => increment(row.localId, cat.key)}
+                            onDecrement={() => decrement(row.localId, cat.key)}
+                            onAmountChange={(v) => setAmount(row.localId, cat.key, v)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Row footer: totals + manual save */}
+                  <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 px-4 py-3">
+                    <div className="flex gap-5">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total Cases</div>
+                        <div className="text-2xl font-black text-primary">{cases}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total Amount</div>
+                        <div className="text-2xl font-black text-primary">{formatINR(amount)}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => manualSave(row.localId)}
+                      disabled={row.saving || !row.trainNumber}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:opacity-40"
+                    >
+                      {row.saving
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Save className="h-4 w-4" />}
+                      Save draft
+                    </button>
+                  </div>
+
+                </div>
+              )}
+
+              {/* Collapsed summary strip */}
+              {!row.expanded && (
+                <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
+                  <span className="font-medium">
+                    {row.workingIn}{row.squadName ? ` · ${row.squadName}` : ""}
+                  </span>
+                  <span className="font-bold text-foreground">
+                    {cases} cases · {formatINR(amount)}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add train row */}
+      <button
+        onClick={() => setRows((rs) => [...rs, newRow()])}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+      >
+        <Plus className="h-4 w-4" /> Add another train
+      </button>
+
+      {/* Spacer */}
+      <div className="h-28" />
+
+      {/* ── Sticky submit bar ── */}
       <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border bg-background/95 backdrop-blur md:bottom-0">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <div className="flex-1 rounded-xl bg-primary-soft px-3 py-2">
-            <div className="flex items-center justify-between gap-3 text-xs font-semibold text-primary">
+          <div className="flex-1 rounded-xl bg-primary-soft px-4 py-2">
+            <div className="flex justify-between text-[11px] font-semibold uppercase tracking-wide text-primary">
               <span>Total Cases</span>
               <span>Total Amount</span>
             </div>
-            <div className="mt-0.5 flex items-center justify-between gap-3">
-              <span className="text-xl font-bold text-primary">{totals.tc}</span>
-              <span className="text-xl font-bold text-primary">{formatINR(totals.ta)}</span>
+            <div className="flex justify-between">
+              <span className="text-2xl font-black text-primary">{grandCases}</span>
+              <span className="text-2xl font-black text-primary">{formatINR(grandAmt)}</span>
             </div>
           </div>
           <button
-            onClick={submit}
-            className="flex h-14 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold uppercase tracking-wide text-primary-foreground shadow-card"
+            onClick={handleSubmitAll}
+            disabled={submitting || rows.every((r) => !r.trainNumber)}
+            className="flex h-16 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold uppercase tracking-wide text-primary-foreground shadow-card disabled:opacity-50"
           >
-            <Save className="h-5 w-5" /> Save
+            {submitting
+              ? <Loader2 className="h-5 w-5 animate-spin" />
+              : <Send className="h-5 w-5" />}
+            Submit<br />duty
           </button>
         </div>
       </div>
@@ -244,83 +606,10 @@ function NewEntryPage() {
   );
 }
 
-function Section({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <section className="mb-4 rounded-2xl border border-border bg-card p-5 shadow-card">
-      <div className="mb-4">
-        <h2 className="text-base font-semibold">{title}</h2>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Grid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-3">{children}</div>;
-}
-
-function Field({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {icon} {label}
-      </div>
-      <div className="mt-0.5 truncate text-sm font-semibold">{children}</div>
-    </div>
-  );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
     </div>
-  );
-}
-
-function NumberInput({
-  label,
-  value,
-  onChange,
-  prefix,
-}: {
-  label: string;
-  value: number;
-  onChange: (s: string) => void;
-  prefix?: string;
-}) {
-  return (
-    <label className="block">
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div className="flex items-center gap-1 rounded-lg border border-input bg-background px-2.5 py-2 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
-        {prefix && <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />}
-        <input
-          inputMode="numeric"
-          value={value === 0 ? "" : String(value)}
-          onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ""))}
-          placeholder="0"
-          className="w-full bg-transparent text-base font-semibold outline-none"
-        />
-      </div>
-    </label>
   );
 }

@@ -7,7 +7,8 @@ export interface UserProfile {
   role: "admin" | "tc";
   base: string;
   mobile: string;
-  employee_id?: string;
+  pfNo?: string;           // PF Number (alphanumeric)
+  employee_id?: string;    // legacy — keep for backward compat
   joining?: string;
   status?: "active" | "disabled";
 }
@@ -33,6 +34,7 @@ export async function createDefaultProfile(uid: string, email: string): Promise<
     role: role,
     base: "NGP",
     mobile: "",
+    pfNo: "",
     status: "active",
   };
 
